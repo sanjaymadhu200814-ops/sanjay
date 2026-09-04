@@ -86,7 +86,11 @@ app.post('/api/operator/update-status', (req, res) => {
   }
   res.status(404).json({ error: 'Token not found.' });
 });
-
+app.post('/api/book-slot', (req, res) => {
+ const bookingData = req.body;
+ console.log("New Booking Received:", bookingData);
+ res.json({ success: true, message: "Slot booked successfully!" });
+});
 // Get all center records for Operator View
 app.get('/api/operator/all', (req, res) => {
   res.json({ currentTokenServing, totalBookings: bookings.length, bookings });
