@@ -177,7 +177,7 @@
   }
 
   async function updateProcurement(tokenNumber, status, paymentStatus) {
-    await fetch('/api/operator/update-status', {
+    await fetch('http://localhost:3000/api/operator/update-status', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ tokenNumber, status, paymentStatus })
