@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farmer Procurement Portal</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: #eef2f5; margin: 0; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .tab-btn { flex: 1; padding: 14px; background: #2c3e50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; }
+    .tab-btn.active { background: #27ae60; }
+    .panel { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: 600; color: #333; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+    button.action-btn { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .status-badge { padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; display: inline-block; }
+    .badge-green { background: #27ae60; }
+    .badge-orange { background: #e67e22; }
+    .badge-blue { background: #2980b9; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+    .metric-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #27ae60; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>🌾 Farmer Procurement & Queue Management Portal</h2>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchView('booking')">1. Book Slot</button>
+    <button class="tab-btn" onclick="switchView('tracker')">2. Live Queue & Tracker</button>
+    <button class="tab-btn" onclick="switchView('operator')">3. Operator Dashboard</button>
+  </div>
+
+  <!-- FEATURE 1: SLOT BOOKING -->
+  <div id="booking-view" class="panel">
+    <h3>Register & Reserve Procurement Slot</h3>
+    <form id="slotForm">
+      <div class="form-group"><label>Farmer Full Name</label><input type="text" id="farmerName" placeholder="e.g. Ramesh Patel" required></div>
+      <div class="form-group"><label>Mobile Number (for SMS Alerts)</label><input type="tel" id="phone" placeholder="e.g. 9876543210" required></div>
+      <div class="form-group">
+        <label>Crop Type</label>
+        <select id="crop"><option>Paddy</option><option>Wheat</option><option>Maize</option><option>Mustard</option></select>
+      </div>
+      <div class="form-group"><label>Estimated Weight (Quintals)</label><input type="number" id="weight" value="20" required></div>
+      <div class="form-group">
+        <label>Preferred Arrival Slot</label>
+        <select id="slotTime"><option>09:00 AM - 10:30 AM</option><option>10:30 AM - 12:00 PM</option><option>01:00 PM - 02:30 PM</option></select>
+      </div>
+      <button type="button" class="action-btn" onclick="submitBooking()">Book Procurement Slot</button>
+    </form>
+  </div>
+
+  <!-- FEATURE 2: LIVE QUEUE & STATUS TRACKER -->
+  <div id="tracker-view" class="panel" style="display:none;">
+    <h3>Track Live Position & Payment Status</h3>
+    <div class="form-group">
+      <label>Enter Token Number</label>
+      <input type="number" id="trackToken" placeholder="e.g. 1">
+      <button class="action-btn" style="background:#2980b9; margin-top:10px;" onclick="fetchQueueStatus()">Check Queue Position</button>
+    </div>
+
+    <div id="queueDisplay" style="display:none;" class="metric-box">
+      <h4>Token #<span id="lblToken"></span> (Booking Ref: <span id="lblRef"></span>)</h4>
+      <p>Current Serving Token at Center: <strong>#<span id="lblServing"></span></strong></p>
+      <p>Farmers Ahead in Line: <span class="status-badge badge-orange"><span id="lblAhead"></span> Farmers</span></p>
+      <p>Estimated Waiting Time: <strong>~<span id="lblWait"></span> Minutes</strong></p>
+      <hr>
+      <p>Procurement Status: <span class="status-badge badge-blue" id="lblProcStatus">BOOKED</span></p>
+      <p>Payment Status: <span class="status-badge badge-green" id="lblPayStatus">PENDING</span></p>
+    </div>
+  </div>
+
+  <!-- FEATURE 3: OPERATOR CENTER DASHBOARD -->
+  <div id="operator-view" class="panel" style="display:none;">
+    <h3>Procurement Center Operations Panel</h3>
+    <button class="action-btn" style="background:#e67e22; margin-bottom: 20px;" onclick="callNextToken()">⏩ Call Next Token to Gate</button>
+
+    <h4>Registered Farmers Queue</h4>
+    <table>
+      <thead>
+        <tr><th>Token</th><th>Farmer</th><th>Crop</th><th>Procurement</th><th>Payment</th><th>Action</th></tr>
+      </thead>
+      <tbody id="operatorTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  function switchView(view) {
+    document.getElementById('booking-view').style.display = view === 'booking' ? 'block' : 'none';
+    document.getElementById('tracker-view').style.display = view === 'tracker' ? 'block' : 'none';
+    document.getElementById('operator-view').style.display = view === 'operator' ? 'block' : 'none';
+    if(view === 'operator') refreshOperatorPanel();
+  }
+
+  async function submitBooking() {
+    const payload = {
+      farmerName: document.getElementById('farmerName').value,
+      phone: document.getElementById('phone').value,
+      crop: document.getElementById('crop').value,
+      weight: document.getElementById('weight').value,
+      slotTime: document.getElementById('slotTime').value
+    };
+
+    const res = await fetch('/api/book-slot', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    
+    if(data.success) {
+      alert(`Booking Confirmed!\nToken Number: #${data.booking.tokenNumber}\nReference ID: ${data.booking.bookingId}`);
+      document.getElementById('trackToken').value = data.booking.tokenNumber;
+      switchView('tracker');
+      fetchQueueStatus();
+    }
+  }
+
+  async function fetchQueueStatus() {
+    const token = document.getElementById('trackToken').value;
+    if(!token) return;
+
+    const res = await fetch(`/api/queue-status/${token}`);
+    const data = await res.json();
+
+    if(res.ok) {
+      document.getElementById('queueDisplay').style.display = 'block';
+      document.getElementById('lblToken').innerText = data.yourToken;
+      document.getElementById('lblRef').innerText = data.booking.bookingId;
+      document.getElementById('lblServing').innerText = data.currentTokenServing;
+      document.getElementById('lblAhead').innerText = data.tokensAhead;
+      document.getElementById('lblWait').innerText = data.estimatedWaitMins;
+      document.getElementById('lblProcStatus').innerText = data.booking.status;
+      document.getElementById('lblPayStatus').innerText = data.booking.paymentStatus;
+    } else {
+      alert(data.error);
+    }
+  }
+
+  async function callNextToken() {
+    const res = await fetch('/api/operator/next-token', { method: 'POST' });
+    const data = await res.json();
+    if(data.success) {
+      alert(`Token #${data.currentTokenServing} (${data.activeBooking.farmerName}) called to Gate.`);
+      refreshOperatorPanel();
+    } else {
+      alert(data.message);
+    }
+  }
+
+  async function refreshOperatorPanel() {
+    const res = await fetch('/api/operator/all');
+    const data = await res.json();
+    const tbody = document.getElementById('operatorTable');
+    tbody.innerHTML = '';
+
+    data.bookings.forEach(b => {
+      tbody.innerHTML += `
+        <tr>
+          <td>#${b.tokenNumber}</td>
+          <td>${b.farmerName}</td>
+          <td>${b.crop} (${b.weight}Q)</td>
+          <td><b>${b.status}</b></td>
+          <td><b>${b.paymentStatus}</b></td>
+          <td>
+            <button onclick="updateProcurement(${b.tokenNumber}, 'COMPLETED', 'PAID')">Mark Paid</button>
+          </td>
+        </tr>
+      `;
+    });
+  }
+
+  async function updateProcurement(tokenNumber, status, paymentStatus) {
+    await fetch('/api/operator/update-status', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ tokenNumber, status, paymentStatus })
+    });
+    refreshOperatorPanel();
+  }
+</script>
+</body>
+</html>
